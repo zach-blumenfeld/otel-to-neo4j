@@ -8,3 +8,10 @@ dependencies = [
     "neo4j>=5.28.0,<7.0.0",
     "python-dotenv>=1.0.0",
 ]
+
+[project.optional-dependencies]
+hf = [
+    "huggingface-hub>=1.13.0",
+    "pandas>=2.0.0",
+    "pyarrow>=14.0.0",
+]

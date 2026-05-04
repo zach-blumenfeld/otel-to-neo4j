@@ -69,6 +69,45 @@ NEO4J_USERNAME=neo4j
 NEO4J_PASSWORD=your-aura-password
 NEO4J_DATABASE=neo4j
 ```
+## Trying it on real datasets
+
+The synthetic samples  are useful for verifying the pipeline works, but you'll get a much better feel for the project by loading a real public agent-trace corpus. One works cleanly with `convert_hf.py`:
+
+| Dataset                                        | Access | Volume | Why it's interesting |
+|------------------------------------------------|---|---|---|
+| **inference-net/HALO-Gemini-3-Flash-AppWorld** | Open | 168 traces / 3,438 spans | Real OpenAI Agents SDK traces of Gemini 3 Flash on AppWorld (banking/calendar/messaging tasks). Apache-2.0. |
+| **PatronusAI/TRAIL** (Not Yet Working)         | Gated (HF login + accept terms) | 148 traces / 1,987 spans | OpenDeepResearch + CodeAct agents on GAIA/SWE-Bench, **with step-level error annotations** (category, severity, evidence). MIT. |
+
+### HALO-AppWorld
+
+Just download and convert.
+
+```bash
+# 1. make sure to use optional deps
+uv sync --extra hf
+
+# 2. Download the dataset (one ~50MB file: traces.jsonl)
+hf download inference-net/HALO-Gemini-3-Flash-AppWorld \
+  --repo-type dataset --local-dir data/halo
+
+# 3. Convert to OTLP shape
+python convert_hf.py --format halo data/halo/traces.jsonl --out data/halo.json
+
+# 4. Ingest (assumes you've already run python ingest.py --init)
+python ingest.py data/halo.json
+```
+
+Now in Neo4j Browser, run `queries.cypher` and you'll see:
+
+- **Q3 (tool sequences)** — the most common pattern is `supervisor__show_account_passwords → spotify__login`, because nearly every Spotify task starts by looking up credentials. That's a real workflow motif.
+- **Q5 (subgraph patterns)** — `AGENT → LLM → TOOL` dominates by a wide margin, with `AGENT → TOOL → TOOL` second. This tells you Gemini 3 Flash is doing classic ReAct rather than parallelizing.
+- **Q6 (conversation flow)** — pick any `trace_id` from `MATCH (t:Trace) RETURN t.trace_id LIMIT 5` and substitute it into Q6 to see the actual prompts and tool calls.
+
+**One caveat:** the timestamps in this particular HALO export are stripped (all set to `2023-05-18T12:00:00Z`). That means **Q1 (parallel tool calls)** and **Q2 (longest critical path duration)** won't produce useful output — both depend on real time intervals. The other queries are unaffected. Future HALO releases may include real timestamps.
+
+### TRAIL
+
+WIP. Not yet working.
 
 ## What the graph looks like
 
