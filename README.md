@@ -80,28 +80,61 @@ NEO4J_DATABASE=neo4j
 (:Span)-[:INVOKES_AGENT]->(:Agent)    # denormalized: agents across traces
 (:Span)-[:USES_MODEL]->(:Model)       # denormalized: models across traces
 (:Span)-[:EMITTED_BY]->(:Service)     # service.name from OTel resource
+(:Span)-[:RETRIEVED]->(:Document)     # retrieved docs as first-class nodes
 ```
 
-Each `:Span` carries the canonical fields from `normalize.py` — `kind` (`LLM`/`TOOL`/`AGENT`/`RETRIEVER`/...), `convention` (which semconv it came from), `status`, `start_time_ns`, `end_time_ns`, `duration_ms`, plus token counts and the raw flat attribute set for anything you didn't anticipate.
+Each `:Span` carries the canonical fields from `normalize.py` — `kind` (`LLM`/`TOOL`/`AGENT`/`RETRIEVER`/...), `convention` (which semconv it came from), `status`, `start_time_ns`, `end_time_ns`, `duration_ms`, plus token counts, **input/output text content**, and the raw flat attribute set for anything you didn't anticipate.
 
-Why both the structural parent edges *and* the denormalized `:Tool`/`:Agent`/`:Model` nodes? The structural edges preserve the DAG; the denormalized labels make cross-trace queries fast. ("Which tools were called by the most agents across the last 1000 traces?" is a one-line Cypher query against the denormalized labels; it's a much uglier query against pure structural data.)
+Why both the structural parent edges *and* the denormalized `:Tool`/`:Agent`/`:Model`/`:Document` nodes? The structural edges preserve the DAG; the denormalized labels make cross-trace queries fast. ("Which tools were called by the most agents across the last 1000 traces?" is a one-line Cypher query against the denormalized labels; it's a much uglier query against pure structural data.)
+
+## Inputs and outputs: what each span actually did
+
+Every span gets `input_text`, `output_text`, and `io_format` properties so you can read the actual content of what the span saw and produced. `io_format` is one of:
+
+- `text` — for `LLM` and `AGENT` spans. Inputs include all system/user messages joined with role tags; outputs include assistant responses.
+- `tool_call` — for `TOOL` spans. `input_text` is the call arguments (typically JSON), `output_text` is the result.
+- `retrieval` — for `RETRIEVER` spans. `input_text` is the query, `output_text` is a compact summary of what came back, and the actual retrieved documents become `:Document` nodes connected via `[:RETRIEVED]` edges (with `score` and `position` on the relationship).
+- `unknown` — fallback for spans where no I/O was found.
+
+This is the harder part of the normalization, because the two semantic conventions disagree about *where* I/O lives:
+
+- **OpenInference** uses indexed attribute arrays — `llm.input_messages.0.message.role`, `llm.input_messages.0.message.content`, `llm.input_messages.1.message.role`, etc. `tool.parameters` and `tool.output_value` for tools. `retrieval.documents.N.document.content/.score/.id` for retrieval.
+- **OTel GenAI** v1.37+ uses **span events** (not attributes) for messages — `gen_ai.user.message`, `gen_ai.assistant.message`, `gen_ai.tool.message`, `gen_ai.choice` — each with content in the event's own attributes. Tool I/O via `gen_ai.tool.call.arguments` (attribute) and `gen_ai.tool.message` (event).
+- **Vercel AI SDK**, **MLflow**, and a generic `input.value`/`output.value` are tolerated as fallbacks.
+
+`normalize.py:extract_io()` reads all of the above and produces a single canonical I/O record per span. The two sample traces in this repo deliberately exercise both code paths:
+
+- `openinference_sample.json` puts message content in indexed attributes.
+- `otel_genai_sample.json` puts message content in span events (the v1.37+ way).
+
+The normalizer treats them identically.
+
+### Truncation
+
+Big LLM prompts can be enormous. By default I/O text is truncated to 2000 characters per field, with a marker showing the total length. Tune via the `IO_MAX_CHARS` env var (set to `0` to disable truncation entirely; not recommended for real corpora).
+
+```env
+IO_MAX_CHARS=2000   # default
+IO_MAX_CHARS=10000  # more verbose
+IO_MAX_CHARS=0      # no truncation (production at your own risk)
+```
 
 ## The semantic-convention bit
 
-The Decision Model brief identifies a real problem: **observability vendors use OpenTelemetry but disagree on the attribute conventions on top of it.** Arize's [OpenInference](https://arize-ai.github.io/openinference/spec/) and the [OTel GenAI Semantic Conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/) are the two real contenders. They disagree on basically everything: span-kind taxonomy, attribute names, operation taxonomy.
+**Observability vendors use OpenTelemetry but disagree on the attribute conventions on top of it.** Arize's [OpenInference](https://arize-ai.github.io/openinference/spec/) and the [OTel GenAI Semantic Conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/) are the two real contenders. They disagree on basically everything: span-kind taxonomy, attribute names, operation taxonomy, *and* where to put I/O content.
 
-`normalize.py` reads both. It also tolerates Vercel AI SDK (`ai.*`), MLflow (`mlflow.*`), and Traceloop (`traceloop.*`) attributes as fallbacks. The output is a single canonical record: same span-kind enum, same model-name field, same token-count fields, regardless of which convention the source SDK used.
+`normalize.py` reads both. It also tolerates Vercel AI SDK (`ai.*`), MLflow (`mlflow.*`), and Traceloop (`traceloop.*`) attributes as fallbacks. The output is a single canonical record: same span-kind enum, same model-name field, same token-count fields, same input/output text fields, regardless of which convention the source SDK used.
 
 The two sample files exercise both code paths:
 
-| File | Convention | Domain |
-|---|---|---|
-| `openinference_sample.json` | OpenInference | Research agent with parallel retrievers |
-| `otel_genai_sample.json` | OTel GenAI | Customer-service refund agent |
+| File | Convention | Domain | I/O carried as |
+|---|---|---|---|
+| `openinference_sample.json` | OpenInference | Research agent with parallel retrievers | Indexed attribute arrays |
+| `otel_genai_sample.json` | OTel GenAI | Customer-service refund agent | Span events |
 
-## The five queries
+## The eight queries
 
-`queries.cypher` has five analytic queries plus a bonus convention-coverage check. Each is heavily commented; here are the high-level ideas.
+`queries.cypher` has eight analytic queries plus a convention-coverage check.
 
 ### Q1 — Find traces with parallel tool calls
 Sibling spans (same parent) with overlapping time intervals. In flat logs you'd sort by parent and compare timestamps pairwise; in Cypher it's one `MATCH`.
@@ -118,8 +151,17 @@ Find error spans, walk descendants, count blast radius. The descendant count tel
 ### Q5 — Common subgraph patterns across traces
 The killer query that's near-impossible in flat logs: find structural motifs (3-step shapes), not text patterns. `AGENT → LLM → TOOL` is a different motif from `AGENT → TOOL → LLM` even if the same tool is called.
 
+### Q6 — Reconstruct a conversation flow for a single trace
+The "show me what happened" query — read every span in temporal order with input/output previews. Closest thing to a transcript view in flat-log tools, but you can filter and slice with Cypher.
+
+### Q7 — Find tool calls with specific argument or result patterns
+With tool I/O captured, you can ask content-based questions across thousands of traces: "show me every `issue_refund` call where status was returned as completed", "find `lookup_order` calls where the amount exceeded $X", etc.
+
+### Q8 — Most-retrieved documents across the corpus
+Documents are first-class nodes, so you can ask which ones get fetched most and from how many distinct traces. Useful for spotting "trusted sources" in retrieval-heavy agents and for cache-warming heuristics.
+
 ### Bonus — Convention coverage
-How much of your corpus is OpenInference vs OTel GenAI? Useful for tracking ecosystem adoption.
+How much of your corpus is OpenInference vs OTel GenAI? Useful for tracking ecosystem adoption
 
 ## Limitations and design notes worth flagging
 
@@ -130,10 +172,6 @@ How much of your corpus is OpenInference vs OTel GenAI? Useful for tracking ecos
 **No batching.** Each span is its own transaction. Fine for tens of thousands of spans, slow for millions. Adding `UNWIND $batch AS span ... MERGE ...` with `apoc.periodic.iterate` is straightforward but not done here for clarity.
 
 **The `:Tool` / `:Agent` / `:Model` denormalization is by name only.** If two services both have a `web_search` tool that means different things, they'll collide. Real production use should namespace by service.
-
-## Why this is interesting beyond just analytics
-
-The schema this project uses for ingested traces is the same shape Neo4j is exploring as the *training data and output format* for a graph-native agent orchestrator (see the consolidated Decision Model brief). The five queries above are also questions you'd want to ask of training data — *how often do agents parallelize, what motifs are common, where do errors cascade*. Same data shape, same tools, same questions. The devrel hook is that graphs are the right abstraction for agent traces *and* for what comes after them.
 
 ## License
 

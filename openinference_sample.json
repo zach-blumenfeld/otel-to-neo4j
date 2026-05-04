@@ -22,7 +22,8 @@
               "attributes": [
                 {"key": "openinference.span.kind", "value": {"stringValue": "AGENT"}},
                 {"key": "agent.name", "value": {"stringValue": "research_agent"}},
-                {"key": "input.value", "value": {"stringValue": "What were the key findings of the 2026 AI Index Report?"}}
+                {"key": "input.value", "value": {"stringValue": "What were the key findings of the 2026 AI Index Report?"}},
+                {"key": "output.value", "value": {"stringValue": "The 2026 AI Index Report's key findings include: (1) frontier agents fail roughly 1 in 3 enterprise tasks; (2) 79% of executives report deployed agents; (3) only 5% of task-specific AI tools reach production. Sources: Stanford HAI 2026, MIT NANDA."}}
               ]
             },
             {
@@ -38,7 +39,13 @@
                 {"key": "llm.model_name", "value": {"stringValue": "gpt-4o"}},
                 {"key": "llm.token_count.prompt", "value": {"intValue": 245}},
                 {"key": "llm.token_count.completion", "value": {"intValue": 89}},
-                {"key": "llm.token_count.total", "value": {"intValue": 334}}
+                {"key": "llm.token_count.total", "value": {"intValue": 334}},
+                {"key": "llm.input_messages.0.message.role", "value": {"stringValue": "system"}},
+                {"key": "llm.input_messages.0.message.content", "value": {"stringValue": "You are a research planner. Decompose the user's question into parallel retrieval subqueries."}},
+                {"key": "llm.input_messages.1.message.role", "value": {"stringValue": "user"}},
+                {"key": "llm.input_messages.1.message.content", "value": {"stringValue": "What were the key findings of the 2026 AI Index Report?"}},
+                {"key": "llm.output_messages.0.message.role", "value": {"stringValue": "assistant"}},
+                {"key": "llm.output_messages.0.message.content", "value": {"stringValue": "Plan: 1) web_search for the official report PDF; 2) vector_db_query for cached Stanford HAI summaries; 3) arxiv_search for related papers. Run all three in parallel."}}
               ]
             },
             {
@@ -52,8 +59,13 @@
               "attributes": [
                 {"key": "openinference.span.kind", "value": {"stringValue": "RETRIEVER"}},
                 {"key": "tool.name", "value": {"stringValue": "web_search"}},
+                {"key": "input.value", "value": {"stringValue": "Stanford HAI AI Index 2026 key findings"}},
                 {"key": "retrieval.documents.0.document.id", "value": {"stringValue": "hai.stanford.edu/ai-index-2026"}},
-                {"key": "retrieval.documents.0.document.score", "value": {"doubleValue": 0.94}}
+                {"key": "retrieval.documents.0.document.score", "value": {"doubleValue": 0.94}},
+                {"key": "retrieval.documents.0.document.content", "value": {"stringValue": "The 2026 AI Index Report finds that agent reliability remains the dominant production blocker. Three benchmarks show consistent ~30-37% failure rates on enterprise-relevant tasks."}},
+                {"key": "retrieval.documents.1.document.id", "value": {"stringValue": "fortune.com/2026/03/24/ai-agents-reliability"}},
+                {"key": "retrieval.documents.1.document.score", "value": {"doubleValue": 0.87}},
+                {"key": "retrieval.documents.1.document.content", "value": {"stringValue": "Kapoor and Narayanan: reliability is a hard prerequisite for automation."}}
               ]
             },
             {
@@ -67,7 +79,10 @@
               "attributes": [
                 {"key": "openinference.span.kind", "value": {"stringValue": "RETRIEVER"}},
                 {"key": "tool.name", "value": {"stringValue": "vector_db_query"}},
-                {"key": "retrieval.documents.0.document.score", "value": {"doubleValue": 0.81}}
+                {"key": "input.value", "value": {"stringValue": "AI Index 2026 enterprise agent deployment statistics"}},
+                {"key": "retrieval.documents.0.document.id", "value": {"stringValue": "internal-cache:pwc-ai-agent-survey-2025"}},
+                {"key": "retrieval.documents.0.document.score", "value": {"doubleValue": 0.81}},
+                {"key": "retrieval.documents.0.document.content", "value": {"stringValue": "PwC AI Agent Survey (May 2025): 79% of US executives report deployed agents. Sample n=308."}}
               ]
             },
             {
@@ -80,7 +95,8 @@
               "status": {"code": "STATUS_CODE_ERROR", "message": "rate limit exceeded"},
               "attributes": [
                 {"key": "openinference.span.kind", "value": {"stringValue": "RETRIEVER"}},
-                {"key": "tool.name", "value": {"stringValue": "arxiv_search"}}
+                {"key": "tool.name", "value": {"stringValue": "arxiv_search"}},
+                {"key": "input.value", "value": {"stringValue": "AI Index 2026 agent reliability"}}
               ]
             },
             {
@@ -96,7 +112,13 @@
                 {"key": "llm.model_name", "value": {"stringValue": "gpt-4o"}},
                 {"key": "llm.token_count.prompt", "value": {"intValue": 1840}},
                 {"key": "llm.token_count.completion", "value": {"intValue": 421}},
-                {"key": "llm.token_count.total", "value": {"intValue": 2261}}
+                {"key": "llm.token_count.total", "value": {"intValue": 2261}},
+                {"key": "llm.input_messages.0.message.role", "value": {"stringValue": "system"}},
+                {"key": "llm.input_messages.0.message.content", "value": {"stringValue": "Synthesize an answer using the retrieved sources. Cite each claim."}},
+                {"key": "llm.input_messages.1.message.role", "value": {"stringValue": "user"}},
+                {"key": "llm.input_messages.1.message.content", "value": {"stringValue": "Question: What were the key findings of the 2026 AI Index Report?\n\nSources: [1] Stanford HAI ~30-37% failure rates; [2] Fortune/Kapoor reliability claim; [3] PwC 79% deployment."}},
+                {"key": "llm.output_messages.0.message.role", "value": {"stringValue": "assistant"}},
+                {"key": "llm.output_messages.0.message.content", "value": {"stringValue": "The 2026 AI Index Report's key findings: (1) frontier agents fail roughly 1 in 3 enterprise tasks [1]; (2) 79% of executives report deployed agents [3]; (3) reliability is the binding production constraint [2]. Note: arxiv source was unavailable due to rate limiting."}}
               ]
             }
           ]

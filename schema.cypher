@@ -27,8 +27,12 @@ CREATE CONSTRAINT model_name_unique IF NOT EXISTS
 CREATE CONSTRAINT service_name_unique IF NOT EXISTS
   FOR (s:Service) REQUIRE s.name IS UNIQUE;
 
+CREATE CONSTRAINT document_id_unique IF NOT EXISTS
+  FOR (d:Document) REQUIRE d.id IS UNIQUE;
+
 // === Indexes for query performance ===
 CREATE INDEX span_kind_idx IF NOT EXISTS FOR (s:Span) ON (s.kind);
 CREATE INDEX span_status_idx IF NOT EXISTS FOR (s:Span) ON (s.status);
 CREATE INDEX span_start_idx IF NOT EXISTS FOR (s:Span) ON (s.start_time_ns);
 CREATE INDEX span_name_idx IF NOT EXISTS FOR (s:Span) ON (s.name);
+CREATE INDEX span_io_format_idx IF NOT EXISTS FOR (s:Span) ON (s.io_format);

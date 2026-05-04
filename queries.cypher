@@ -138,3 +138,59 @@ RETURN s.convention AS convention,
        count(*)     AS span_count,
        count(DISTINCT s.trace_id) AS trace_count
 ORDER BY span_count DESC;
+
+
+// ---------------------------------------------------------------------
+// Q6. Reconstruct a conversation flow for a single trace.
+// ---------------------------------------------------------------------
+// Walks the parent-of tree in temporal order and prints what each span
+// actually did. This is the "show me what happened" query — closest thing
+// to a transcript view in flat-log tools, but you can filter by kind,
+// status, etc. with one extra clause.
+//
+// Replace the trace_id with whatever trace you want to inspect.
+// ---------------------------------------------------------------------
+MATCH (s:Span {trace_id: '4bf92f3577b34da6a3ce929d0e0e4736'})
+RETURN s.start_time_ns       AS t,
+       s.kind                AS kind,
+       s.name                AS name,
+       s.status              AS status,
+       substring(coalesce(s.input_text, ''), 0, 80)  AS input_preview,
+       substring(coalesce(s.output_text, ''), 0, 80) AS output_preview
+ORDER BY t;
+
+
+// ---------------------------------------------------------------------
+// Q7. Find tool calls with specific argument or result patterns.
+// ---------------------------------------------------------------------
+// Once tool I/O is captured, you can ask content-based questions across
+// thousands of traces: "show me every issue_refund call where the amount
+// was over $100", "show me lookup_order calls where status was returned
+// as 'shipped'", etc. The I/O is JSON in input_text/output_text — Cypher
+// CONTAINS works fine for prefix/substring matches; for structured
+// queries you'd parse with apoc.convert.fromJsonMap.
+// ---------------------------------------------------------------------
+MATCH (s:Span {kind: 'TOOL'})-[:CALLS_TOOL]->(t:Tool {name: 'issue_refund'})
+WHERE s.output_text CONTAINS '"status": "completed"'
+RETURN s.trace_id      AS trace_id,
+       s.input_text    AS arguments,
+       s.output_text   AS result,
+       s.duration_ms   AS duration_ms
+LIMIT 25;
+
+
+// ---------------------------------------------------------------------
+// Q8. Most-retrieved documents across the corpus.
+// ---------------------------------------------------------------------
+// Documents are first-class nodes, so you can ask which ones get fetched
+// most and from how many distinct traces. Useful for spotting "trusted
+// sources" in retrieval-heavy agents and for cache-warming heuristics.
+// ---------------------------------------------------------------------
+MATCH (s:Span)-[r:RETRIEVED]->(d:Document)
+RETURN d.id                    AS document_id,
+       count(DISTINCT r)       AS retrieval_count,
+       count(DISTINCT s.trace_id) AS trace_count,
+       avg(r.score)            AS avg_score,
+       substring(coalesce(d.content_preview, ''), 0, 100) AS content_preview
+ORDER BY retrieval_count DESC
+LIMIT 15;

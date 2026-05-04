@@ -56,10 +56,25 @@ SET s.name = $name,
     s.input_tokens = $input_tokens,
     s.output_tokens = $output_tokens,
     s.total_tokens = $total_tokens,
+    s.input_text = $input_text,
+    s.output_text = $output_text,
+    s.io_format = $io_format,
     s += $raw_attributes
 WITH s
 MATCH (t:Trace {trace_id: $trace_id})
 MERGE (t)-[:CONTAINS]->(s)
+"""
+
+# Upsert one retrieved document and link to the RETRIEVER span that fetched it.
+# Documents become first-class nodes so you can ask cross-trace questions like
+# "which documents are retrieved most often", "which traces saw doc X", etc.
+UPSERT_DOCUMENT = """
+MATCH (s:Span {trace_id: $trace_id, span_id: $span_id})
+MERGE (d:Document {id: coalesce($doc_id, $span_id + '#' + toString($index))})
+SET d.content_preview = $content,
+    d.last_score = $score
+MERGE (s)-[r:RETRIEVED]->(d)
+SET r.score = $score, r.position = $index
 """
 
 # Link span to its parent (CHILD_OF / PARENT_OF semantics).
@@ -107,7 +122,7 @@ MERGE (src)-[:LINKS_TO]->(dst)
 # Reset query: drop everything OTel-related. Useful for dev, dangerous in prod.
 RESET_GRAPH = """
 MATCH (n)
-WHERE n:Span OR n:Trace OR n:Tool OR n:Agent OR n:Model OR n:Service
+WHERE n:Span OR n:Trace OR n:Tool OR n:Agent OR n:Model OR n:Service OR n:Document
 DETACH DELETE n
 """
 
@@ -214,6 +229,9 @@ def ingest_file(driver: Driver, database: str, filepath: Path) -> dict:
                 input_tokens=tokens["input_tokens"],
                 output_tokens=tokens["output_tokens"],
                 total_tokens=tokens["total_tokens"],
+                input_text=normalized["input_text"],
+                output_text=normalized["output_text"],
+                io_format=normalized["io_format"],
                 raw_attributes=normalized["raw_attributes"],
             )
             stats["spans"] += 1
@@ -245,6 +263,17 @@ def ingest_file(driver: Driver, database: str, filepath: Path) -> dict:
                             span_id=normalized["span_id"],
                             model_name=normalized["model_name"])
                 stats["models"] += 1
+
+            # Retrieved documents — make each its own node so cross-trace
+            # queries like "which docs are retrieved most often" work.
+            for idx, doc in enumerate(normalized.get("documents") or []):
+                session.run(UPSERT_DOCUMENT,
+                            trace_id=normalized["trace_id"],
+                            span_id=normalized["span_id"],
+                            doc_id=doc.get("id"),
+                            content=doc.get("content"),
+                            score=doc.get("score"),
+                            index=idx)
 
         # Second pass: link parents and span-links.
         # All spans are now in the graph, so MATCH is safe.

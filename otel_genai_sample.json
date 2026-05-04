@@ -22,7 +22,9 @@
               "attributes": [
                 {"key": "gen_ai.operation.name", "value": {"stringValue": "invoke_agent"}},
                 {"key": "gen_ai.agent.name", "value": {"stringValue": "refund_agent"}},
-                {"key": "gen_ai.system", "value": {"stringValue": "vertex_ai"}}
+                {"key": "gen_ai.system", "value": {"stringValue": "vertex_ai"}},
+                {"key": "input.value", "value": {"stringValue": "I want a refund for order #84291. Item arrived damaged."}},
+                {"key": "output.value", "value": {"stringValue": "Refund of $89.99 has been issued for order #84291. A confirmation email has been sent."}}
               ]
             },
             {
@@ -38,6 +40,29 @@
                 {"key": "gen_ai.request.model", "value": {"stringValue": "gemini-2.0-flash"}},
                 {"key": "gen_ai.usage.input_tokens", "value": {"intValue": 312}},
                 {"key": "gen_ai.usage.output_tokens", "value": {"intValue": 47}}
+              ],
+              "events": [
+                {
+                  "name": "gen_ai.system.message",
+                  "timeUnixNano": "1714838500050000000",
+                  "attributes": [
+                    {"key": "content", "value": {"stringValue": "You are a customer service refund agent. Use the lookup_order tool first, then check_refund_policy, then issue_refund if eligible."}}
+                  ]
+                },
+                {
+                  "name": "gen_ai.user.message",
+                  "timeUnixNano": "1714838500060000000",
+                  "attributes": [
+                    {"key": "content", "value": {"stringValue": "I want a refund for order #84291. Item arrived damaged."}}
+                  ]
+                },
+                {
+                  "name": "gen_ai.assistant.message",
+                  "timeUnixNano": "1714838501050000000",
+                  "attributes": [
+                    {"key": "content", "value": {"stringValue": "I'll help with that. Let me look up your order first."}}
+                  ]
+                }
               ]
             },
             {
@@ -51,7 +76,17 @@
               "attributes": [
                 {"key": "gen_ai.operation.name", "value": {"stringValue": "execute_tool"}},
                 {"key": "gen_ai.tool.name", "value": {"stringValue": "lookup_order"}},
-                {"key": "gen_ai.tool.call.id", "value": {"stringValue": "call_a1b2c3"}}
+                {"key": "gen_ai.tool.call.id", "value": {"stringValue": "call_a1b2c3"}},
+                {"key": "gen_ai.tool.call.arguments", "value": {"stringValue": "{\"order_id\": \"84291\"}"}}
+              ],
+              "events": [
+                {
+                  "name": "gen_ai.tool.message",
+                  "timeUnixNano": "1714838501790000000",
+                  "attributes": [
+                    {"key": "content", "value": {"stringValue": "{\"order_id\": \"84291\", \"status\": \"delivered\", \"total\": 89.99, \"date\": \"2026-04-22\", \"customer\": \"customer_3192\"}"}}
+                  ]
+                }
               ]
             },
             {
@@ -64,7 +99,17 @@
               "status": {"code": "STATUS_CODE_OK"},
               "attributes": [
                 {"key": "gen_ai.operation.name", "value": {"stringValue": "execute_tool"}},
-                {"key": "gen_ai.tool.name", "value": {"stringValue": "check_refund_policy"}}
+                {"key": "gen_ai.tool.name", "value": {"stringValue": "check_refund_policy"}},
+                {"key": "gen_ai.tool.call.arguments", "value": {"stringValue": "{\"order_date\": \"2026-04-22\", \"reason\": \"damaged\"}"}}
+              ],
+              "events": [
+                {
+                  "name": "gen_ai.tool.message",
+                  "timeUnixNano": "1714838502390000000",
+                  "attributes": [
+                    {"key": "content", "value": {"stringValue": "{\"eligible\": true, \"refund_amount\": 89.99, \"policy\": \"30-day-damaged-goods\"}"}}
+                  ]
+                }
               ]
             },
             {
@@ -80,6 +125,22 @@
                 {"key": "gen_ai.request.model", "value": {"stringValue": "gemini-2.0-flash"}},
                 {"key": "gen_ai.usage.input_tokens", "value": {"intValue": 478}},
                 {"key": "gen_ai.usage.output_tokens", "value": {"intValue": 92}}
+              ],
+              "events": [
+                {
+                  "name": "gen_ai.user.message",
+                  "timeUnixNano": "1714838502510000000",
+                  "attributes": [
+                    {"key": "content", "value": {"stringValue": "Order looked up: $89.99, delivered 2026-04-22. Policy check: eligible, 30-day-damaged-goods. Proceed with refund?"}}
+                  ]
+                },
+                {
+                  "name": "gen_ai.assistant.message",
+                  "timeUnixNano": "1714838503690000000",
+                  "attributes": [
+                    {"key": "content", "value": {"stringValue": "Yes, eligible under 30-day-damaged-goods policy. Issue $89.99 refund."}}
+                  ]
+                }
               ]
             },
             {
@@ -92,7 +153,17 @@
               "status": {"code": "STATUS_CODE_OK"},
               "attributes": [
                 {"key": "gen_ai.operation.name", "value": {"stringValue": "execute_tool"}},
-                {"key": "gen_ai.tool.name", "value": {"stringValue": "issue_refund"}}
+                {"key": "gen_ai.tool.name", "value": {"stringValue": "issue_refund"}},
+                {"key": "gen_ai.tool.call.arguments", "value": {"stringValue": "{\"order_id\": \"84291\", \"amount\": 89.99}"}}
+              ],
+              "events": [
+                {
+                  "name": "gen_ai.tool.message",
+                  "timeUnixNano": "1714838505390000000",
+                  "attributes": [
+                    {"key": "content", "value": {"stringValue": "{\"refund_id\": \"rfd_77a8b\", \"status\": \"completed\", \"amount\": 89.99}"}}
+                  ]
+                }
               ]
             },
             {
@@ -105,7 +176,17 @@
               "status": {"code": "STATUS_CODE_OK"},
               "attributes": [
                 {"key": "gen_ai.operation.name", "value": {"stringValue": "execute_tool"}},
-                {"key": "gen_ai.tool.name", "value": {"stringValue": "send_confirmation_email"}}
+                {"key": "gen_ai.tool.name", "value": {"stringValue": "send_confirmation_email"}},
+                {"key": "gen_ai.tool.call.arguments", "value": {"stringValue": "{\"to\": \"customer_3192\", \"refund_id\": \"rfd_77a8b\"}"}}
+              ],
+              "events": [
+                {
+                  "name": "gen_ai.tool.message",
+                  "timeUnixNano": "1714838506090000000",
+                  "attributes": [
+                    {"key": "content", "value": {"stringValue": "{\"sent\": true, \"message_id\": \"msg_99c4d\"}"}}
+                  ]
+                }
               ]
             }
           ]
