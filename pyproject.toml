@@ -1,0 +1,10 @@
+[project]
+name = "otel-to-neo4j"
+version = "0.1.0"
+description = "OpenTelemetry (OTel) for Agents to Neo4j"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "neo4j>=5.28.0,<7.0.0",
+    "python-dotenv>=1.0.0",
+]

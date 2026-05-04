@@ -1,0 +1,107 @@
+{
+  "resourceSpans": [
+    {
+      "resource": {
+        "attributes": [
+          {"key": "service.name", "value": {"stringValue": "research-agent"}},
+          {"key": "telemetry.sdk.language", "value": {"stringValue": "python"}}
+        ]
+      },
+      "scopeSpans": [
+        {
+          "scope": {"name": "openinference.instrumentation.langchain", "version": "0.1.0"},
+          "spans": [
+            {
+              "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+              "spanId": "00f067aa0ba902b7",
+              "parentSpanId": "",
+              "name": "research_agent.run",
+              "startTimeUnixNano": "1714838400000000000",
+              "endTimeUnixNano": "1714838408500000000",
+              "status": {"code": "STATUS_CODE_OK"},
+              "attributes": [
+                {"key": "openinference.span.kind", "value": {"stringValue": "AGENT"}},
+                {"key": "agent.name", "value": {"stringValue": "research_agent"}},
+                {"key": "input.value", "value": {"stringValue": "What were the key findings of the 2026 AI Index Report?"}}
+              ]
+            },
+            {
+              "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+              "spanId": "00f067aa0ba902b8",
+              "parentSpanId": "00f067aa0ba902b7",
+              "name": "planner.chat",
+              "startTimeUnixNano": "1714838400100000000",
+              "endTimeUnixNano": "1714838401500000000",
+              "status": {"code": "STATUS_CODE_OK"},
+              "attributes": [
+                {"key": "openinference.span.kind", "value": {"stringValue": "LLM"}},
+                {"key": "llm.model_name", "value": {"stringValue": "gpt-4o"}},
+                {"key": "llm.token_count.prompt", "value": {"intValue": 245}},
+                {"key": "llm.token_count.completion", "value": {"intValue": 89}},
+                {"key": "llm.token_count.total", "value": {"intValue": 334}}
+              ]
+            },
+            {
+              "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+              "spanId": "00f067aa0ba902b9",
+              "parentSpanId": "00f067aa0ba902b7",
+              "name": "retrieve_web",
+              "startTimeUnixNano": "1714838401600000000",
+              "endTimeUnixNano": "1714838403800000000",
+              "status": {"code": "STATUS_CODE_OK"},
+              "attributes": [
+                {"key": "openinference.span.kind", "value": {"stringValue": "RETRIEVER"}},
+                {"key": "tool.name", "value": {"stringValue": "web_search"}},
+                {"key": "retrieval.documents.0.document.id", "value": {"stringValue": "hai.stanford.edu/ai-index-2026"}},
+                {"key": "retrieval.documents.0.document.score", "value": {"doubleValue": 0.94}}
+              ]
+            },
+            {
+              "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+              "spanId": "00f067aa0ba902ba",
+              "parentSpanId": "00f067aa0ba902b7",
+              "name": "retrieve_internal",
+              "startTimeUnixNano": "1714838401650000000",
+              "endTimeUnixNano": "1714838403200000000",
+              "status": {"code": "STATUS_CODE_OK"},
+              "attributes": [
+                {"key": "openinference.span.kind", "value": {"stringValue": "RETRIEVER"}},
+                {"key": "tool.name", "value": {"stringValue": "vector_db_query"}},
+                {"key": "retrieval.documents.0.document.score", "value": {"doubleValue": 0.81}}
+              ]
+            },
+            {
+              "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+              "spanId": "00f067aa0ba902bb",
+              "parentSpanId": "00f067aa0ba902b7",
+              "name": "retrieve_arxiv",
+              "startTimeUnixNano": "1714838401700000000",
+              "endTimeUnixNano": "1714838404100000000",
+              "status": {"code": "STATUS_CODE_ERROR", "message": "rate limit exceeded"},
+              "attributes": [
+                {"key": "openinference.span.kind", "value": {"stringValue": "RETRIEVER"}},
+                {"key": "tool.name", "value": {"stringValue": "arxiv_search"}}
+              ]
+            },
+            {
+              "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+              "spanId": "00f067aa0ba902bc",
+              "parentSpanId": "00f067aa0ba902b7",
+              "name": "synthesize.chat",
+              "startTimeUnixNano": "1714838404200000000",
+              "endTimeUnixNano": "1714838408400000000",
+              "status": {"code": "STATUS_CODE_OK"},
+              "attributes": [
+                {"key": "openinference.span.kind", "value": {"stringValue": "LLM"}},
+                {"key": "llm.model_name", "value": {"stringValue": "gpt-4o"}},
+                {"key": "llm.token_count.prompt", "value": {"intValue": 1840}},
+                {"key": "llm.token_count.completion", "value": {"intValue": 421}},
+                {"key": "llm.token_count.total", "value": {"intValue": 2261}}
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
