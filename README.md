@@ -1,4 +1,5 @@
 # OTel → Neo4j: agent traces as graphs
+![trace visual](trace.png)
 
 A tiny, configurable utility for ingesting OpenTelemetry agent traces into Neo4j and running the kind of analytics that flat span lists can't.
 
