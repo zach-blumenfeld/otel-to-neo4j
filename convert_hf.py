@@ -23,10 +23,8 @@ Usage:
     python ingest.py data/halo.json data/trail.json
 
 The output is OTLP JSON — `resourceSpans -> scopeSpans -> spans` — which
-ingest.py and normalize.py handle natively. The normalizer happens to accept
-flat-dict attributes too (a quirk of how OTLP-via-JSON exporters vary), so we
-don't even need to repackage attributes into the OTLP `[{key, value: ...}]`
-list shape. We just bundle rows by trace_id and write the envelope.
+ingest.py (via the `otela` library) handles natively. We bundle rows by
+trace_id and write the envelope.
 """
 
 from __future__ import annotations
@@ -69,8 +67,8 @@ def _load_rows(filepath: Path) -> Iterable[dict]:
 
 def _iso_to_unix_nano(iso: str | None) -> str:
     """Parse ISO 8601 timestamp to nanoseconds since epoch as a string.
-    OTLP wants a string; treats null/empty input as '0' (which my normalizer
-    handles gracefully — duration_ms ends up None)."""
+    OTLP wants a string; treats null/empty input as '0' (which otela handles
+    gracefully — duration_ms ends up None)."""
     if not iso:
         return "0"
     try:
@@ -102,10 +100,90 @@ def _normalize_attrs(raw: Any) -> dict[str, Any]:
     if isinstance(raw, dict):
         return raw
     if isinstance(raw, list):
-        # Already-OTLP shape — let normalize.py handle it natively
-        # by passing through unchanged in the envelope.
+        # Already-OTLP shape — pass through unchanged in the envelope; otela
+        # parses both flat-dict and OTLP list-of-{key,value} attributes.
         return raw  # type: ignore
     return {}
+
+
+def _otlp_attrs_to_dict(attrs: list[dict]) -> dict[str, Any]:
+    """Flatten OTLP-shape `[{key, value: {stringValue/intValue/...}}]` into
+    a plain dict. Used only when we need to merge extra attributes onto
+    rows that arrived already in OTLP shape."""
+    out: dict[str, Any] = {}
+    for attr in attrs or []:
+        key = attr.get("key")
+        value_obj = attr.get("value", {}) or {}
+        if "stringValue" in value_obj:
+            out[key] = value_obj["stringValue"]
+        elif "intValue" in value_obj:
+            out[key] = int(value_obj["intValue"])
+        elif "doubleValue" in value_obj:
+            out[key] = float(value_obj["doubleValue"])
+        elif "boolValue" in value_obj:
+            out[key] = bool(value_obj["boolValue"])
+        elif "arrayValue" in value_obj:
+            arr = value_obj["arrayValue"].get("values", [])
+            out[key] = [list(v.values())[0] if v else None for v in arr]
+        else:
+            out[key] = value_obj
+    return out
+
+
+def _dict_to_otlp_attrs(d: Any) -> list[dict]:
+    """Convert a flat `{key: value}` dict into OTLP wire shape
+    `[{key, value: {stringValue|intValue|...}}]`. otela's reader expects
+    this exact shape; the legacy lenient flat-dict path is gone.
+    Pass-through if the input is already a list."""
+    if isinstance(d, list):
+        return d
+    if not d:
+        return []
+    out: list[dict] = []
+    for key, value in d.items():
+        if value is None:
+            out.append({"key": key, "value": {"stringValue": ""}})
+        elif isinstance(value, bool):
+            out.append({"key": key, "value": {"boolValue": value}})
+        elif isinstance(value, int):
+            # OTLP encodes intValue as a string
+            out.append({"key": key, "value": {"intValue": str(value)}})
+        elif isinstance(value, float):
+            out.append({"key": key, "value": {"doubleValue": value}})
+        elif isinstance(value, (list, tuple)):
+            # Best-effort: stringify each element.
+            out.append({
+                "key": key,
+                "value": {"arrayValue": {"values": [
+                    {"stringValue": "" if v is None else str(v)} for v in value
+                ]}},
+            })
+        elif isinstance(value, dict):
+            # OTLP doesn't have a nested-map value for attributes; serialize.
+            out.append({"key": key, "value": {"stringValue": json.dumps(value, default=str)}})
+        else:
+            out.append({"key": key, "value": {"stringValue": str(value)}})
+    return out
+
+
+def _resource_to_otlp(resource: dict) -> dict:
+    """Ensure a resource envelope has OTLP-shape attributes."""
+    if not resource:
+        return {}
+    out = dict(resource)
+    if "attributes" in out:
+        out["attributes"] = _dict_to_otlp_attrs(out["attributes"])
+    return out
+
+
+def _scope_to_otlp(scope: dict) -> dict:
+    """Ensure a scope envelope has OTLP-shape attributes (if it has any)."""
+    if not scope:
+        return {}
+    out = dict(scope)
+    if "attributes" in out:
+        out["attributes"] = _dict_to_otlp_attrs(out["attributes"])
+    return out
 
 
 def _coerce_dict(value: Any) -> dict[str, Any]:
@@ -170,7 +248,7 @@ def convert_halo(rows: Iterable[dict]) -> dict:
             "startTimeUnixNano": _iso_to_unix_nano(row.get("start_time")),
             "endTimeUnixNano": _iso_to_unix_nano(row.get("end_time")),
             "status": status,
-            "attributes": _normalize_attrs(row.get("attributes")),
+            "attributes": _dict_to_otlp_attrs(_normalize_attrs(row.get("attributes"))),
             "events": row.get("events") or [],
             "links": row.get("links") or [],
         }
@@ -179,9 +257,9 @@ def convert_halo(rows: Iterable[dict]) -> dict:
     resource_spans = []
     for key, spans in groups.items():
         resource_spans.append({
-            "resource": resources[key],
+            "resource": _resource_to_otlp(resources[key]),
             "scopeSpans": [{
-                "scope": scopes[key],
+                "scope": _scope_to_otlp(scopes[key]),
                 "spans": spans,
             }],
         })
@@ -251,10 +329,9 @@ def convert_trail(rows: Iterable[dict]) -> dict:
         # Start with the OpenInference attributes already on the span
         attrs = _normalize_attrs(_pick(row, "attributes"))
         if isinstance(attrs, list):
-            # Already OTLP shape; convert to flat dict to merge error annotations,
-            # then rely on normalize.py to read the flat dict
-            from normalize import _attrs_to_dict
-            attrs = _attrs_to_dict(attrs)
+            # Already OTLP shape; convert to flat dict so we can merge error
+            # annotations, then otela will read the flat dict downstream.
+            attrs = _otlp_attrs_to_dict(attrs)
 
         # Lift TRAIL error annotations as custom span attributes.
         # Q4 (error blast radius) and Q6 (conversation flow) will now show
@@ -286,7 +363,7 @@ def convert_trail(rows: Iterable[dict]) -> dict:
             "startTimeUnixNano": _iso_to_unix_nano(_pick(row, "start_time")),
             "endTimeUnixNano": _iso_to_unix_nano(_pick(row, "end_time")),
             "status": status,
-            "attributes": attrs,
+            "attributes": _dict_to_otlp_attrs(attrs),
             "events": row.get("events") or [],
             "links": row.get("links") or [],
         }
@@ -295,9 +372,9 @@ def convert_trail(rows: Iterable[dict]) -> dict:
     resource_spans = []
     for key, spans in groups.items():
         resource_spans.append({
-            "resource": resources[key],
+            "resource": _resource_to_otlp(resources[key]),
             "scopeSpans": [{
-                "scope": scopes[key],
+                "scope": _scope_to_otlp(scopes[key]),
                 "spans": spans,
             }],
         })
