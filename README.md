@@ -39,16 +39,11 @@ uv sync
 cp .env.example .env
 # Edit .env with your credentials — works for any Neo4j distro
 
-# 3. Initialize the schema (one-time per database)
-uv run python ingest.py --init
-
-# 4. Ingest the sample traces
+# 3. Ingest the sample traces (constraints + indexes are auto-created on first run)
 uv run python ingest.py openinference_sample.json otel_genai_sample.json
 
-# 5. Open Neo4j Browser and run queries
+# 4. Open Neo4j Browser and run queries from queries.cypher
 ```
-
-That's the whole thing. Five steps, no other moving parts.
 
 ## Configuring against any Neo4j distro
 
@@ -72,7 +67,7 @@ NEO4J_DATABASE=neo4j
 ```
 ## Trying it on real datasets
 
-The synthetic samples  are useful for verifying the pipeline works, but you'll get a much better feel for the project by loading a real public agent-trace corpus. One works cleanly with `convert_hf.py`:
+The synthetic samples are useful for verifying the pipeline works, but you'll get a much better feel for the project by loading a real public agent-trace corpus. One works cleanly with `convert_hf.py`:
 
 | Dataset                                        | Access | Volume | Why it's interesting |
 |------------------------------------------------|---|---|---|
@@ -94,7 +89,7 @@ hf download inference-net/HALO-Gemini-3-Flash-AppWorld \
 # 3. Convert to OTLP shape
 python convert_hf.py --format halo data/halo/traces.jsonl --out data/halo.json
 
-# 4. Ingest (assumes you've already run python ingest.py --init)
+# 4. Ingest
 python ingest.py data/halo.json
 ```
 
