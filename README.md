@@ -10,7 +10,7 @@ Handles both major LLM trace semantic conventions:
 - **OpenInference** (Arize-led) — `openinference.span.kind`, `llm.*`, `tool.*`, `retrieval.*`
 - **OTel GenAI Semantic Conventions** (CNCF) — `gen_ai.operation.name`, `gen_ai.tool.name`, `gen_ai.agent.name`
 
-Auto-detects which convention each span uses and normalizes them into a single property-graph schema you can query with Cypher.
+Normalization across conventions is handled by [otela](https://github.com/zach-blumenfeld/otela), which auto-detects each span's convention and yields a single canonical record shape. This project is the Neo4j-side bridge on top of that — it takes otela's records and writes them as a property graph you can query with Cypher.
 
 ---
 
@@ -39,16 +39,11 @@ uv sync
 cp .env.example .env
 # Edit .env with your credentials — works for any Neo4j distro
 
-# 3. Initialize the schema (one-time per database)
-uv run python ingest.py --init
-
-# 4. Ingest the sample traces
+# 3. Ingest the sample traces (constraints + indexes are auto-created on first run)
 uv run python ingest.py openinference_sample.json otel_genai_sample.json
 
-# 5. Open Neo4j Browser and run queries
+# 4. Open Neo4j Browser and run queries from queries.cypher
 ```
-
-That's the whole thing. Five steps, no other moving parts.
 
 ## Configuring against any Neo4j distro
 
@@ -72,7 +67,7 @@ NEO4J_DATABASE=neo4j
 ```
 ## Trying it on real datasets
 
-The synthetic samples  are useful for verifying the pipeline works, but you'll get a much better feel for the project by loading a real public agent-trace corpus. One works cleanly with `convert_hf.py`:
+The synthetic samples are useful for verifying the pipeline works, but you'll get a much better feel for the project by loading a real public agent-trace corpus. One works cleanly with `convert_hf.py`:
 
 | Dataset                                        | Access | Volume | Why it's interesting |
 |------------------------------------------------|---|---|---|
@@ -94,7 +89,7 @@ hf download inference-net/HALO-Gemini-3-Flash-AppWorld \
 # 3. Convert to OTLP shape
 python convert_hf.py --format halo data/halo/traces.jsonl --out data/halo.json
 
-# 4. Ingest (assumes you've already run python ingest.py --init)
+# 4. Ingest
 python ingest.py data/halo.json
 ```
 
@@ -123,7 +118,7 @@ WIP. Not yet working.
 (:Span)-[:RETRIEVED]->(:Document)     # retrieved docs as first-class nodes
 ```
 
-Each `:Span` carries the canonical fields from `normalize.py` — `kind` (`LLM`/`TOOL`/`AGENT`/`RETRIEVER`/...), `convention` (which semconv it came from), `status`, `start_time_ns`, `end_time_ns`, `duration_ms`, plus token counts, **input/output text content**, and the raw flat attribute set for anything you didn't anticipate.
+Each `:Span` carries the canonical fields produced by `otela` — `kind` (`LLM`/`TOOL`/`AGENT`/`RETRIEVER`/...), `convention` (which semconv it came from), `status`, `start_time_ns`, `end_time_ns`, `duration_ms`, plus token counts, **input/output text content**, and the raw flat attribute set for anything otela didn't anticipate.
 
 Why both the structural parent edges *and* the denormalized `:Tool`/`:Agent`/`:Model`/`:Document` nodes? The structural edges preserve the DAG; the denormalized labels make cross-trace queries fast. ("Which tools were called by the most agents across the last 1000 traces?" is a one-line Cypher query against the denormalized labels; it's a much uglier query against pure structural data.)
 
@@ -142,12 +137,12 @@ This is the harder part of the normalization, because the two semantic conventio
 - **OTel GenAI** v1.37+ uses **span events** (not attributes) for messages — `gen_ai.user.message`, `gen_ai.assistant.message`, `gen_ai.tool.message`, `gen_ai.choice` — each with content in the event's own attributes. Tool I/O via `gen_ai.tool.call.arguments` (attribute) and `gen_ai.tool.message` (event).
 - **Vercel AI SDK**, **MLflow**, and a generic `input.value`/`output.value` are tolerated as fallbacks.
 
-`normalize.py:extract_io()` reads all of the above and produces a single canonical I/O record per span. The two sample traces in this repo deliberately exercise both code paths:
+[otela](https://github.com/zach-blumenfeld/otela) reads all of the above and produces a single canonical I/O record per span. The two sample traces in this repo deliberately exercise both code paths:
 
 - `openinference_sample.json` puts message content in indexed attributes.
 - `otel_genai_sample.json` puts message content in span events (the v1.37+ way).
 
-The normalizer treats them identically.
+otela treats them identically.
 
 ### Truncation
 
@@ -163,7 +158,7 @@ IO_MAX_CHARS=0      # no truncation (production at your own risk)
 
 **Observability vendors use OpenTelemetry but disagree on the attribute conventions on top of it.** Arize's [OpenInference](https://arize-ai.github.io/openinference/spec/) and the [OTel GenAI Semantic Conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/) are the two real contenders. They disagree on basically everything: span-kind taxonomy, attribute names, operation taxonomy, *and* where to put I/O content.
 
-`normalize.py` reads both. It also tolerates Vercel AI SDK (`ai.*`), MLflow (`mlflow.*`), and Traceloop (`traceloop.*`) attributes as fallbacks. The output is a single canonical record: same span-kind enum, same model-name field, same token-count fields, same input/output text fields, regardless of which convention the source SDK used.
+[otela](https://github.com/zach-blumenfeld/otela) reads both. It also tolerates Vercel AI SDK (`ai.*`), MLflow (`mlflow.*`), and Traceloop (`traceloop.*`) attributes as fallbacks. The output is a single canonical record: same span-kind enum, same model-name field, same token-count fields, same input/output text fields, regardless of which convention the source SDK used.
 
 The two sample files exercise both code paths:
 
