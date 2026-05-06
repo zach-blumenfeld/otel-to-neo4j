@@ -319,7 +319,8 @@ hf = [
 requires-dist = [
     { name = "huggingface-hub", marker = "extra == 'hf'", specifier = ">=1.13.0" },
     { name = "neo4j", specifier = ">=5.28.0,<7.0.0" },
-    { name = "otela", git = "https://github.com/zach-blumenfeld/otela" },
+    { name = "otela" },
+    { name = "otela", specifier = ">=0.1.1" },
     { name = "pandas", marker = "extra == 'hf'", specifier = ">=2.0.0" },
     { name = "pyarrow", marker = "extra == 'hf'", specifier = ">=14.0.0" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
@@ -329,10 +330,14 @@ provides-extras = ["hf"]
 [[package]]
 name = "otela"
 version = "0.1.1"
-source = { git = "https://github.com/zach-blumenfeld/otela#6cbf1127d53c38cbe29ff9167f79a92157d038ae" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "orjson" },
     { name = "pyarrow" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/7e/c6/f3eed9ab95663007117208fbe031dfa0054292a2dd1eb246f172b133f3fd/otela-0.1.1.tar.gz", hash = "sha256:1427f60b15b8af3f75ddbdd5e6d49b8e83286cbc1abd0906ce86d86cfecb4cd9", size = 31972, upload-time = "2026-05-05T21:11:06.009Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f8/59/290ad64c655c29d03a0300459489829b1bafc1990c13abf2484f42a12c3b/otela-0.1.1-py3-none-any.whl", hash = "sha256:c058c04a55c7a367655f97ad1171b7054ef318af4e63bbc760ae3282bd3c591c", size = 36165, upload-time = "2026-05-05T21:11:04.96Z" },
 ]
 
 [[package]]
